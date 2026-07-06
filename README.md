@@ -150,16 +150,10 @@ pip install -r requirements.txt
 python -m main
 ```
 
-## 🔮 Future Work
 
-- **Lasso (L1) regression** — compare sparsity-inducing regularization against Ridge's shrinkage
-- **Volume-based features** — incorporate trading volume alongside lagged volatility
-- **Time-series models (GARCH, AR)** — the natural econometric baseline for volatility forecasting, worth benchmarking against
-- **Walk-forward cross-validation** — a single chronological split is a reasonable start, but rolling-window validation would better reflect real deployment
-- **Non-linear models** — test whether volatility clustering has non-linear structure a linear model can't capture
 
 ## 👤 Author
 
-Akshat — Aspiring Quant Researcher / ML Engineer
+Akshat 
 
 If this project is useful or interesting, a ⭐ on GitHub is appreciated.
