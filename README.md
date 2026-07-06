@@ -16,6 +16,7 @@ Predict next-day realized volatility of the S&P 500 using its own recent volatil
 - **Data:** S&P 500 (`^GSPC`) daily prices via `yfinance`
 
 ## 🧠 Concepts I Was Practicing
+## 🧠 Concepts I Was Practicing
 
 **Linear Regression**
 ```
@@ -27,6 +28,7 @@ y = Xw + b
 w := w - α · ∇J(w)
 b := b - α · ∂J/∂b
 ```
+Written by hand in NumPy. `scikit-learn` is only used afterward, to check my implementation against a known-correct reference — never during training.
 Written by hand in NumPy. `scikit-learn` is only used afterward, to check my implementation against a known-correct reference — never during training.
 
 **Ridge (L2) and Lasso (L1) Regularization**
@@ -176,11 +178,12 @@ Worth noting: this is only ever a next-*trading*-day forecast, since the data sk
 
 ## 🛠️ Tech Stack
 
-Python 3.9 · NumPy · Pandas · Matplotlib · yfinance · scikit-learn (validation only, never used for training)
+Python 3.9 · NumPy · Pandas · Matplotlib · yfinance · scikit-learn (used only for validation, never for training)
 
 ## ▶️ How to Run
 
 ```bash
+git clone https://github.com/uctiot007/stock-volatility-predictor.git
 git clone https://github.com/uctiot007/stock-volatility-predictor.git
 cd stock-volatility-predictor
 
@@ -192,8 +195,10 @@ pip install -r requirements.txt
 
 python -m main
 python -m src.predict
+python -m src.predict
 ```
 
+## 🔮 Things I'd Like to Try Next
 ## 🔮 Things I'd Like to Try Next
 
 - **A GARCH baseline** — the standard econometric approach to volatility forecasting; the natural next test given the linear model's ceiling
