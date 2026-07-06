@@ -1,21 +1,21 @@
 # 📈 Stock Volatility Predictor
-### From-Scratch Gradient Descent & Ridge Regression, Validated Against Sklearn
+### Implementing Gradient Descent & Ridge Regression from Scratch, and Checking My Work Against Sklearn
 
 ## 🚀 Overview
 
-Most student ML projects call `.fit()` and stop there. This project instead builds the entire pipeline — including the optimizer itself — from first principles, then rigorously proves that it converges to the mathematically correct answer.
+This project started as an attempt to take the linear regression and gradient descent math I'd learned in theory and actually implement it myself, rather than just calling `sklearn.linear_model.LinearRegression()`. The goal wasn't to build the most accurate volatility model possible — it was to make sure I genuinely understood what's happening under the hood of a basic ML training loop: the gradients, the update rule, and what regularization actually does to the loss surface.
 
-The goal wasn't just to predict volatility. It was to demonstrate, with evidence, that I understand *why* the optimization works, where it breaks, and how to diagnose it when it doesn't match expectations.
+Along the way, a few things didn't work the way I expected on the first try, and figuring out *why* taught me more than if everything had just matched immediately. I've tried to document those moments honestly below, rather than only showing the final clean result.
 
 ## 🎯 Problem Statement
 
-Predict next-day realized volatility of the S&P 500 using its own recent volatility history — a supervised regression problem built on a well-known market property: **volatility clustering** (volatile periods tend to persist, so recent volatility is informative about tomorrow's).
+Predict next-day realized volatility of the S&P 500 using its own recent volatility history. This relies on a known property of markets called volatility clustering — calm and turbulent periods tend to persist for a while — so recent volatility is at least somewhat informative about tomorrow's.
 
-- **Inputs (X):** lagged rolling 21-day realized volatility (previous 5 days)
+- **Inputs (X):** the previous 5 days of rolling 21-day realized volatility
 - **Target (y):** next day's realized volatility
 - **Data:** S&P 500 (`^GSPC`) daily prices via `yfinance`
 
-## 🧠 Core Concepts Implemented
+## 🧠 Concepts I Was Practicing
 
 **Linear Regression**
 ```
@@ -27,15 +27,15 @@ y = Xw + b
 w := w - α · ∇J(w)
 b := b - α · ∂J/∂b
 ```
-Implemented manually in NumPy — no `sklearn.linear_model` used during training, only for validation afterward.
+Written by hand in NumPy. `scikit-learn` is only used afterward, to check my implementation against a known-correct reference — never during training.
 
 **Ridge Regression (L2 Regularization)**
 ```
 J(w) = MSE(y, ŷ) + λ‖w‖²
 ```
-Added to counteract multicollinearity discovered during validation (see below). The bias term is deliberately excluded from the penalty, matching standard convention.
+Added after noticing my weights weren't matching sklearn's (see below) — this wasn't planned from the start, it came out of debugging.
 
-**Bias-Variance Tradeoff**, shown empirically via a λ sweep rather than just stated theoretically (see Results).
+**Bias-Variance Tradeoff** — I wanted to actually see this rather than just recite the definition, so I swept several λ values and measured test error at each one (see Results).
 
 ## 🏗️ Project Structure
 
@@ -49,9 +49,12 @@ stock-volatility-predictor/
 │   ├── data_loader.py        # Fetch, clean, cache S&P 500 data
 │   ├── features.py           # Log returns, rolling volatility, lag features
 │   ├── model.py               # Gradient descent + Ridge, from scratch
-│   └── evaluate.py           # Metrics + sklearn comparison + plots
+│   ├── evaluate.py           # Metrics + sklearn comparison + plots
+│   └── predict.py            # Load a trained model, forecast the next trading day
 │
-├── main.py                   # End-to-end pipeline: data → train → tune → evaluate
+├── main.py                   # End-to-end pipeline: data → train → tune → evaluate → save
+├── outputs/
+│   └── trained_model.npz     # Saved weights/bias/normalization stats
 ├── requirements.txt
 └── README.md
 ```
@@ -61,35 +64,35 @@ stock-volatility-predictor/
 ```
 Raw Prices → Log Returns → Rolling Volatility → Lag Features
     → Chronological Train/Test Split → Feature Standardization (train stats only)
-    → Gradient Descent (λ sweep) → Evaluation vs Sklearn → Visualization
+    → Gradient Descent (λ sweep) → Evaluation vs Sklearn → Save Model → Predict
 ```
 
 ---
 
-## 🔬 Investigation: Three Real Findings, Not Just a Working Model
+## 🔬 A Few Things I Got Wrong First, and What They Taught Me
 
-This is the part that separates this project from a tutorial copy-paste. Getting a model to *run* was the easy part — three issues came up during validation that required actual debugging and understanding to resolve.
+I'm including this section because I think the mistakes were more instructive than the final working version.
 
-### 1. Weights didn't match sklearn at first — and the reason was multicollinearity, not a bug
+### 1. My weights didn't match sklearn's, and I had to figure out why
 
-After the initial gradient descent run, predictions closely tracked sklearn's `LinearRegression` (test MSE within ~1% of each other), but the learned **weights** were noticeably different despite both models reaching a similar loss:
+My first working gradient descent run produced predictions close to sklearn's `LinearRegression`, but the actual weight values were noticeably different:
 
 | | vol_lag_1 | vol_lag_2 | vol_lag_3 | vol_lag_4 | vol_lag_5 |
 |---|---|---|---|---|---|
 | Custom GD | 0.119 | 0.037 | 0.001 | -0.015 | -0.029 |
 | Sklearn OLS | 0.165 | -0.013 | -0.018 | -0.001 | -0.019 |
 
-This is expected, not a defect: the five lagged volatility features are highly autocorrelated with each other, so the loss surface has a flat, elongated valley rather than one sharp minimum — many different weight combinations produce nearly identical predictions. This is the textbook symptom of **multicollinearity**, and it's exactly why the project moved to Ridge regression next: a unique, stable solution requires regularization when features are this correlated.
+My first instinct was that I'd made a bug somewhere. After reading more into it, I learned this is a known effect of multicollinearity: my 5 lagged volatility features are highly correlated with each other, so the loss surface isn't a clean bowl with one minimum — it's a flat, elongated valley where many different weight combinations give almost the same loss. Both models had found valid, low-loss solutions; they just landed in different spots along that valley. This is the actual textbook reason people reach for regularization, which is what pushed me to implement Ridge next.
 
-### 2. A loss-scaling bug made an early Ridge-vs-sklearn comparison invalid
+### 2. My "same lambda" comparison against sklearn's Ridge was actually invalid
 
-When first comparing custom Ridge against `sklearn.linear_model.Ridge` at "the same" λ, the sklearn weights barely moved from OLS while the custom weights shrank substantially — a red flag that the two penalties weren't actually equivalent.
+Once I added Ridge, I compared my custom weights to `sklearn.linear_model.Ridge` at what I thought was the same regularization strength. Sklearn's weights barely moved from its unregularized version, while mine shrank a lot — a sign that "same λ" didn't mean the same thing to both implementations.
 
-Root cause: this implementation's loss **averages** squared error over `n` samples (`(1/n)·Σerror² + λΣw²`), while sklearn's Ridge **sums** it (`Σerror² + alpha·Σw²`). With ~1,600 training samples, the same nominal λ is ~1,600x stronger in relative terms here than in sklearn's formulation. Fixed by scaling: `alpha = λ · n_train` when constructing the sklearn comparison model. After the fix, the two solutions matched to 5+ decimal places (see Results). This is a subtle, easy-to-miss detail that only surfaces when you actually derive both loss functions rather than assuming "same λ" means "same regularization."
+Working through both loss functions explicitly showed why: my loss averages squared error over `n` samples, while sklearn's Ridge sums it. With around 1,600 training rows, my λ was effectively ~1,600x stronger, relatively, than the same-numbered α in sklearn. Once I scaled my λ by `n_train` to compare fairly, my weights and sklearn's Ridge matched to five decimal places. This was a useful reminder that a hyperparameter with the same name isn't automatically doing the same thing across two implementations — I had to actually derive both formulas to check.
 
-### 3. Prediction lag at volatility regime changes
+### 3. The model lags at sudden volatility spikes
 
-Visual inspection of predicted-vs-actual plots shows the model tracks overall volatility levels well, but tends to **lag by roughly one day at sharp turning points** — spikes in predicted volatility arrive slightly after the actual spike. This is an inherent property of the model, not a fixable error: since features are strictly *past* volatility, a linear autoregressive model can only extrapolate recent momentum, not anticipate new shocks. Worth stating explicitly rather than glossing over — it defines the honest limits of this approach.
+Looking at predicted-vs-actual plots, the model tracks overall volatility levels reasonably well, but tends to lag by roughly a day whenever there's a sharp jump. This makes sense once I thought about it: the model only ever sees past volatility, so it can extrapolate recent momentum but has no way to anticipate a shock before its inputs reflect it. I don't think this is fixable within this model's design — it would need forward-looking information (options-implied volatility, news) or a different model class (e.g. GARCH) to do better here.
 
 ---
 
@@ -105,7 +108,7 @@ Visual inspection of predicted-vs-actual plots shows the model tracks overall vo
 | 0.1 | 0.000321 |
 | 1.0 | 0.000649 |
 
-The U-shape is the bias-variance tradeoff made visible: mild regularization improves generalization, but too much (λ ≥ 0.1) forces weights toward zero aggressively enough to destroy real signal, and test error rises sharply.
+Seeing this U-shape appear from my own numbers, rather than just reading about it, made the bias-variance tradeoff click in a way it hadn't from theory alone.
 
 ### Final Model Comparison
 
@@ -115,30 +118,40 @@ The U-shape is the bias-variance tradeoff made visible: mild regularization impr
 | Sklearn LinearRegression (no reg.) | 0.000315 | 0.000268 |
 | Sklearn Ridge (α equivalent to λ=0.01) | — | 0.000257 |
 
-### Weight Convergence — Custom GD vs Sklearn Ridge (fair comparison, matched α)
+### Weight Convergence — Custom GD vs Sklearn Ridge (after fixing the scaling comparison)
 
 | | vol_lag_1 | vol_lag_2 | vol_lag_3 | vol_lag_4 | vol_lag_5 |
 |---|---|---|---|---|---|
 | Custom Ridge GD | 0.10416383 | 0.03458131 | 0.00473984 | -0.00875307 | -0.02173006 |
 | Sklearn Ridge | 0.10416385 | 0.03458128 | 0.00473984 | -0.00875306 | -0.02173007 |
 
-Matching to 5+ decimal places. Bias term matches to 10 decimal places. This is direct evidence the manual gradient descent implementation is mathematically correct, not merely "close enough."
+Matching to five decimal places gave me real confidence that the gradient and update rule I wrote by hand are actually correct, not just producing plausible-looking output.
 
-## ✅ Key Achievements
+## 🔮 Live Prediction
 
-- ✔ From-scratch gradient descent converges to the exact closed-form Ridge solution once regularization is scaled correctly
-- ✔ Ridge (λ=0.01) beats both unregularized GD and sklearn's plain OLS on test MSE — a real, measured generalization improvement, not just a theoretical claim
-- ✔ Diagnosed and explained *why* weights diverged from OLS (multicollinearity) before reaching for regularization, rather than adding it blindly
-- ✔ Caught and fixed a loss-scaling inconsistency that would have invalidated the sklearn comparison entirely
+Once trained, the model can forecast the next trading day's volatility from the most recent available data:
+
+```bash
+python -m main            # trains, tunes lambda, saves outputs/trained_model.npz
+python -m src.predict     # loads the saved model and forecasts the next trading day
+```
+
+Example output:
+```
+Most recent trading data as of: 2026-07-02
+Predicted next-day (annualized) volatility: 0.17405
+```
+
+Worth noting: this is only ever a next-*trading*-day forecast, since the underlying data skips weekends/holidays — "tomorrow" on a Friday means the following Monday.
 
 ## 🛠️ Tech Stack
 
-Python 3.9 · NumPy · Pandas · Matplotlib · yfinance · scikit-learn (validation only, never used for training)
+Python 3.9 · NumPy · Pandas · Matplotlib · yfinance · scikit-learn (used only for validation, never for training)
 
 ## ▶️ How to Run
 
 ```bash
-git clone https://github.com/yourusername/stock-volatility-predictor.git
+git clone https://github.com/uctiot007/stock-volatility-predictor.git
 cd stock-volatility-predictor
 
 python -m venv .venv
@@ -148,12 +161,19 @@ source .venv/bin/activate   # Mac/Linux
 pip install -r requirements.txt
 
 python -m main
+python -m src.predict
 ```
 
+## 🔮 Things I'd Like to Try Next
 
+- **Lasso (L1) regression** — compare against Ridge's shrinkage behavior
+- **Volume as a feature** — currently only past volatility is used, volume is fetched but unused
+- **Walk-forward cross-validation** — a single chronological split is a reasonable start, but rolling-window validation would be more rigorous
+- **A GARCH baseline** — the standard econometric approach to volatility forecasting, worth comparing against directly
+- **Non-linear models** — to check whether volatility clustering has structure a linear model can't capture
 
 ## 👤 Author
 
-Akshat 
+Akshat — learning quantitative finance and ML by building things and checking my understanding against known-correct implementations.
 
-If this project is useful or interesting, a ⭐ on GitHub is appreciated.
+If you spot something I got wrong or could do better, I'd genuinely like to know — feel free to open an issue.
