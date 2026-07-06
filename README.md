@@ -177,3 +177,4 @@ python -m src.predict
 Akshat — learning quantitative finance and ML by building things and checking my understanding against known-correct implementations.
 
 If you spot something I got wrong or could do better, I'd genuinely like to know — feel free to open an issue.
+If you like this project, give it a ⭐ on GitHub — it helps visibility!
