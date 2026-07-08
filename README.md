@@ -15,6 +15,7 @@ Predict next-day realized volatility of the S&P 500 using its own recent history
 - **Target:** next day's realized volatility
 - **Data:** S&P 500 (`^GSPC`) daily prices via `yfinance`
 
+
 ## 🧠 Concepts I Was Practicing
 
 **Linear Regression**
